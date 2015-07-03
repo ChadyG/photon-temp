@@ -51,7 +51,6 @@ void query_ds18b20() {
 
   if (OneWire::crc8(addr, 7) != addr[7]) {
     Serial.println("CRC is not valid!");
-    Spark.publish("Error", "CRC is not valid!");
     delay(2000);
     return;
   }
@@ -63,30 +62,24 @@ void query_ds18b20() {
     Serial.print(addr[i], HEX);
   }*/
   String rom(addr[0], HEX);
-  Spark.publish("ROM", rom);
 
   // the first ROM byte indicates which chip
   // includes debug output of chip type
   switch (addr[0]) {
     case 0x10:
       Serial.println("  Chip = DS18S20");  // or old DS1820
-      Spark.publish("Chip", "DS18S20");
       break;
     case 0x28:
       Serial.println("  Chip = DS18B20");
-      Spark.publish("Chip", "DS18B20");
       break;
     case 0x22:
       Serial.println("  Chip = DS1822");
-      Spark.publish("Chip", "DS1822");
       break;
     case 0x26:
       Serial.println("  Chip = DS2438");
-      Spark.publish("Chip", "DS2438");
       break;
     default:
       Serial.println("Device is not a DS18x20/DS1822/DS2438 device. Skipping...");
-      Spark.publish("Error", "Device is not a DS18B20 device. Skipping...");
       delay(2000);
       return;
   }
@@ -115,18 +108,17 @@ void query_ds18b20() {
 
   String whole(temp.whole, DEC);
   String fract(temp.fract, DEC);
-  Spark.publish("Celsius", whole + "." + fract + " C");
+  Spark.publish("OW_Temp", whole + "." + fract + " C");
 }
 
 void query_dht11() {
   // Reading temperature or humidity takes about 250 milliseconds!
-// Sensor readings may also be up to 2 seconds 'old' (its a
-// very slow sensor)
-  float h = dht.getHumidity();
-// Read temperature as Celsius
-  float t = dht.getTempCelcius();
-// Read temperature as Farenheit
-  float f = dht.getTempFarenheit();
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  float t = dht.readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  float f = dht.readTemperature(true);
 
   // Check if any reads failed and exit early (to try again).
   if (isnan(h) || isnan(t) || isnan(f)) {
@@ -134,33 +126,47 @@ void query_dht11() {
     return;
   }
 
-// Compute heat index
-// Must send in temp in Fahrenheit!
-  float hi = dht.getHeatIndex();
-  float dp = dht.getDewPoint();
-  float k = dht.getTempKelvin();
+  // Compute heat index in Fahrenheit (the default)
+  float hif = dht.computeHeatIndex(f, h);
+  // Compute heat index in Celsius (isFahreheit = false)
+  float hic = dht.computeHeatIndex(t, h, false);
 
-  Serial.print("Humid: ");
+  Serial.print("Humidity: ");
   Serial.print(h);
-  Serial.print("% - ");
-  Serial.print("Temp: ");
+  Serial.print(" %\t");
+  Serial.print("Temperature: ");
   Serial.print(t);
-  Serial.print("*C ");
+  Serial.print(" *C ");
   Serial.print(f);
-  Serial.print("*F ");
-  Serial.print(k);
-  Serial.print("*K - ");
-  Serial.print("DewP: ");
-  Serial.print(dp);
-  Serial.print("*C - ");
-  Serial.print("HeatI: ");
-  Serial.print(hi);
-  Serial.println("*C");
-  Serial.println(Time.timeStr());
+  Serial.print(" *F\t");
+  Serial.print("Heat index: ");
+  Serial.print(hic);
+  Serial.print(" *C ");
+  Serial.print(hif);
+  Serial.println(" *F");
+
+  int whc = (int)t;
+  int frc = (int)(t * 100 ) % 100;
+  String whole(whc, DEC);
+  String fract(frc, DEC);
+
+  int whh = (int)h;
+  int frh = (int)(h * 100 ) % 100;
+  String wholeh(whh, DEC);
+  String fracth(frh, DEC);
+
+  int whhi = (int)hic;
+  int frhi = (int)(hic * 100 ) % 100;
+  String wholehi(whhi, DEC);
+  String fracthi(frhi, DEC);
+
+  Spark.publish("DHT_Temp", whole + "." + fract + " C");
+  Spark.publish("DHT_Humidity", wholeh + "." + fracth + " %");
+  Spark.publish("DHT_HeatIndex", wholehi + "." + fracthi + " C");
 }
 
 void loop(void) {
   query_ds18b20();
   query_dht11();
-  delay(1000);
+  delay(10000);
 }
